@@ -54,3 +54,18 @@
 </p>
 
 <p align="center"><i>把复杂的工作，做得更清晰、更实用、更可靠。</i></p>
+
+### 📮 关注公众号
+
+<p align="center">
+  在公众号里写 AI 应用、Agent Skill 与开发工具链的实操记录：踩过的坑、能直接复用的做法。
+</p>
+
+<p align="center">
+  <img src="https://github.com/FreeCodeCampXYG/starline-gzh-design/releases/download/assets-v1/wechat-wudaoshinian-banner.png" width="620" alt="微信搜一搜 · 悟道拾年" />
+</p>
+
+<p align="center">
+  <b>悟道拾年</b> · 微信号 / ID：<code>StarlineAi</code><br />
+  微信「搜一搜」输入 <b>悟道拾年</b>，或扫上方二维码关注。
+</p>
