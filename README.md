@@ -44,6 +44,8 @@
 
 ### 📊 GitHub 活跃度
 
+> 贡献图可展示账号设置允许公开的贡献记录；开启“包含私有贡献”后，私有贡献只显示为贡献方块，不会暴露仓库名称或代码内容。
+
 <p align="center">
   <img src="https://github-profile-summary-cards.vercel.app/api/cards/stats?username=FreeCodeCampXYG&theme=github" height="165" alt="GitHub 统计" />
   <img src="https://github-profile-summary-cards.vercel.app/api/cards/repos-per-language?username=FreeCodeCampXYG&theme=github" height="165" alt="仓库语言分布" />
