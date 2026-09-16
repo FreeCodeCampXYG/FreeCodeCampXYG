@@ -1,0 +1,82 @@
+name: Cleanup Actions Storage
+
+on:
+  schedule:
+    # 每周日 UTC 03:17 执行，错开整点以减少定时任务拥挤。
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+
+# 只授予删除 Actions artifact/cache 所需权限，不允许该任务写入仓库内容。
+permissions:
+  actions: write
+
+concurrency:
+  group: cleanup-actions-storage
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Remove historical artifacts and caches
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          repo="${GITHUB_REPOSITORY}"
+          default_branch="$(gh api "repos/${repo}" --jq '.default_branch')"
+          cutoff_epoch="$(date -u -d '14 days ago' +%s)"
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf "${temp_dir}"' EXIT
+
+          artifact_file="${temp_dir}/artifacts.tsv"
+          gh api --paginate "repos/${repo}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | [.id, (.workflow_run.id // 0), .created_at, .expired] | @tsv' \
+            > "${artifact_file}"
+
+          # 保留最新 workflow run 的 artifact，避免旧构建长期占用共享存储；Release 资产不在此 API 范围内。
+          latest_run_id="$(awk -F '\t' '$4 == "false" { print $3 "\t" $2 }' "${artifact_file}" | sort -k1,1 | tail -n 1 | cut -f2)"
+          artifact_deleted=0
+          cache_deleted=0
+          failures=0
+
+          while IFS=$'\t' read -r artifact_id run_id created_at expired; do
+            [[ -z "${artifact_id}" ]] && continue
+            if [[ "${expired}" == "true" || -z "${latest_run_id}" || "${run_id}" != "${latest_run_id}" ]]; then
+              if gh api --method DELETE "repos/${repo}/actions/artifacts/${artifact_id}" >/dev/null; then
+                ((artifact_deleted += 1))
+              else
+                echo "::error::删除 artifact 失败: ${artifact_id}"
+                ((failures += 1))
+              fi
+            fi
+          done < "${artifact_file}"
+
+          cache_file="${temp_dir}/caches.tsv"
+          gh api --paginate "repos/${repo}/actions/caches?per_page=100" \
+            --jq '.actions_caches[] | [.id, .ref, (.last_accessed_at // ""), .created_at] | @tsv' \
+            > "${cache_file}"
+
+          # 默认分支近期缓存用于加速构建；其他分支/tag/PR缓存可重建，超过 14 天未访问也删除。
+          while IFS=$'\t' read -r cache_id ref last_accessed_at created_at; do
+            [[ -z "${cache_id}" ]] && continue
+            access_time="${last_accessed_at:-${created_at}}"
+            access_epoch="$(date -u -d "${access_time}" +%s)"
+            if [[ "${ref}" != "refs/heads/${default_branch}" || "${access_epoch}" -lt "${cutoff_epoch}" ]]; then
+              if gh api --method DELETE "repos/${repo}/actions/caches/${cache_id}" >/dev/null; then
+                ((cache_deleted += 1))
+              else
+                echo "::error::删除 cache 失败: ${cache_id}"
+                ((failures += 1))
+              fi
+            fi
+          done < "${cache_file}"
+
+          echo "清理完成: artifacts=${artifact_deleted}, caches=${cache_deleted}, failures=${failures}"
+          if (( failures > 0 )); then
+            exit 1
+          fi
